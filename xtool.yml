@@ -1,5 +1,8 @@
 version: 1
-bundleID: com.example.MyApp
+bundleID: com.hotwheelz3000.spelunkr
 # The SwiftPM product used as the app. Also names the built .app/.ipa.
-# Change it with ./rename-app.sh rather than by hand.
-product: MyApp
+product: SPELUNKR
+# Merged into the generated Info.plist (background audio, dark UI, rotation).
+infoPath: SPELUNKR-Info.plist
+# 1024x1024 opaque PNG, made by scripts/make-app-icon.py (the site has no app icon).
+iconPath: Resources/AppIcon.png
