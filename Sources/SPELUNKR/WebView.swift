@@ -3,10 +3,10 @@ import UIKit
 import WebKit
 
 struct WebView: UIViewRepresentable {
-    let url: URL
+    let state: PageState
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(homeURL: url)
+        Coordinator(state: state)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -21,36 +21,101 @@ struct WebView: UIViewRepresentable {
         // The page's own fullscreen button (the HTML Fullscreen API).
         configuration.preferences.isElementFullscreenEnabled = true
 
+        let controller = configuration.userContentController
+        controller.addUserScript(
+            WKUserScript(source: AppScripts.page, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        )
+        controller.addUserScript(
+            WKUserScript(source: AppScripts.noZoom, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        )
+        controller.add(context.coordinator, name: AppScripts.mediaHandler)
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        // No peek-and-pop link previews: feels like an app, not a browser.
+        webView.allowsLinkPreview = false
         // Transparent until the page paints, so the purple shows instead of white.
         webView.isOpaque = false
         webView.backgroundColor = .spelunkrPurple
         webView.scrollView.backgroundColor = .spelunkrPurple
         webView.underPageBackgroundColor = .spelunkrPurple
-        // No pull-to-refresh: a reload would cut the channel you're watching.
         webView.scrollView.alwaysBounceHorizontal = false
         webView.scrollView.showsHorizontalScrollIndicator = false
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
 
         context.coordinator.webView = webView
-        webView.load(URLRequest(url: url))
+        state.webView = webView
+        webView.load(URLRequest(url: state.homeURL))
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
-        let homeURL: URL
-        weak var webView: WKWebView?
-        private var loadRetries = 0
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: AppScripts.mediaHandler)
+    }
 
-        init(homeURL: URL) {
-            self.homeURL = homeURL
+    @MainActor
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+        let state: PageState
+        weak var webView: WKWebView?
+        /// The page or embedded player whose video is playing, for Picture in Picture.
+        private var playingFrame: WKFrameInfo?
+        private var inPiP = false
+        private var observers: [NSObjectProtocol] = []
+
+        init(state: PageState) {
+            self.state = state
             super.init()
+            let center = NotificationCenter.default
+            // Leaving the app with a video playing: keep it going in Picture in Picture.
+            observers.append(center.addObserver(
+                forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.enterPiP() }
+            })
+            // Back in the app: put the video back in the page.
+            observers.append(center.addObserver(
+                forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.exitPiP() }
+            })
         }
+
+        // MARK: Playback
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard let body = message.body as? [String: Any], let playing = body["playing"] as? Bool else { return }
+            if playing {
+                playingFrame = message.frameInfo
+            } else if playingFrame?.securityOrigin.host == message.frameInfo.securityOrigin.host {
+                playingFrame = nil
+            }
+            // The screen stays on while a channel plays, and sleeps normally once it stops.
+            UIApplication.shared.isIdleTimerDisabled = playingFrame != nil
+        }
+
+        private func enterPiP() {
+            guard let webView, let frame = playingFrame else { return }
+            webView.evaluateJavaScript(
+                "window.__spkPiP ? window.__spkPiP(true) : false", in: frame, in: .page
+            ) { [weak self] result in
+                if case .success(let value) = result, (value as? Bool) == true { self?.inPiP = true }
+            }
+        }
+
+        private func exitPiP() {
+            guard inPiP, let webView, let frame = playingFrame else { inPiP = false; return }
+            inPiP = false
+            webView.evaluateJavaScript("window.__spkPiP && window.__spkPiP(false)", in: frame, in: .page)
+        }
+
+        // MARK: Navigation
 
         /// spelunkr.tv and its subdomains stay in the app.
         private func isInternal(_ url: URL) -> Bool {
@@ -111,27 +176,28 @@ struct WebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            loadRetries = 0
+            webView.scrollView.pinchGestureRecognizer?.isEnabled = false
+            state.offline = false
+            // Give the page a moment to draw the channel before the loading screen fades.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                MainActor.assumeIsolated { self?.state.loaded = true }
+            }
         }
 
-        /// If the app opens with no connection, try again by itself a few times.
+        /// Nothing loaded at all (no connection when the app opened): show the offline screen.
         func webView(
             _ webView: WKWebView,
             didFailProvisionalNavigation navigation: WKNavigation!,
             withError error: Error
         ) {
-            guard webView.backForwardList.currentItem == nil, loadRetries < 6 else { return }
-            loadRetries += 1
-            let home = homeURL
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak webView] in
-                MainActor.assumeIsolated {
-                    guard let webView, webView.backForwardList.currentItem == nil else { return }
-                    webView.load(URLRequest(url: home))
-                }
-            }
+            if (error as NSError).code == NSURLErrorCancelled { return }
+            guard !state.loaded, webView.backForwardList.currentItem == nil else { return }
+            state.offline = true
         }
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            playingFrame = nil
+            UIApplication.shared.isIdleTimerDisabled = false
             webView.reload()
         }
     }

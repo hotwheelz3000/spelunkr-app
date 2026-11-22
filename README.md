@@ -18,12 +18,15 @@ The app isn't on the App Store, so you install it yourself (iOS 17 or later):
 
 ## What it does
 
-- **Full-screen site** with no Safari bars, and the site's purple instead of a white flash while it loads.
+- **Full-screen site** with no Safari bars. A loading screen with the icon shows until the first channel is on.
+- **Feels like an app:** no text selection, long-press menus, link previews or pinch zoom.
 - **Videos play in the page**, with fullscreen, rotation to landscape, AirPlay and Picture in Picture.
-- **Sound keeps going** with the screen locked, and plays with the silent switch on.
+- **Leave the app mid-channel** and it keeps playing in Picture in Picture (when iOS allows it for that video).
+- **Screen stays on** while a channel plays, then sleeps normally once it stops.
+- **Lock screen and Control Center** show what's playing, with play/pause. Sound keeps going with the screen locked and the silent switch on.
 - **Swipe from the edge** to go back or forward.
 - **Links that leave SPELUNKR** (an Internet Archive page, say) open in Safari.
-- **No connection when it opens?** It tries again by itself.
+- **No connection?** A "No connection" screen with **Retry**, and it tunes back in by itself once you're online.
 
 ## Building
 

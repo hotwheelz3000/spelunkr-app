@@ -17,7 +17,9 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "SPELUNKR"
+            name: "SPELUNKR",
+            // The icon on the loading screen.
+            resources: [.copy("LaunchIcon.png")]
         ),
     ]
 )
