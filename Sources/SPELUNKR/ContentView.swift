@@ -9,9 +9,10 @@ struct ContentView: View {
             // Fills the status bar and home indicator areas with the site's purple.
             Color(uiColor: .spelunkrPurple)
                 .ignoresSafeArea()
-            // The page itself stays inside the safe area, so the notch and the
-            // home indicator never cover the player or its controls.
+            // The page stays below the status bar, but runs to the bottom edge
+            // (under the home indicator), so there's no empty strip under the guide.
             WebView(state: state)
+                .ignoresSafeArea(edges: .bottom)
 
             if state.offline {
                 OfflineView { state.retry() }

@@ -41,6 +41,8 @@ struct WebView: UIViewRepresentable {
         webView.backgroundColor = .spelunkrPurple
         webView.scrollView.backgroundColor = .spelunkrPurple
         webView.underPageBackgroundColor = .spelunkrPurple
+        // No extra space added at the bottom for the home indicator: the page fills it.
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.alwaysBounceHorizontal = false
         webView.scrollView.showsHorizontalScrollIndicator = false
         webView.scrollView.pinchGestureRecognizer?.isEnabled = false
