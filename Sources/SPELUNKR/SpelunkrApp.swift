@@ -10,10 +10,6 @@ extension UIColor {
 struct SpelunkrApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() {
-        AppLog.installCrashHandlers()
-    }
-
     var body: some Scene {
         WindowGroup {
             ContentView()

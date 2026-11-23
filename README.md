@@ -32,9 +32,8 @@ The app isn't on the App Store, so you install it yourself (iOS 17 or later):
 
 Every push to `main` builds an unsigned IPA with [xtool](https://xtool.sh) on GitHub Actions and publishes it as the `latest` release. The icon is drawn by `scripts/make-app-icon.py`.
 
-## Logs and updates
+## Updates
 
-- **Share logs:** shake the phone anywhere in the app to share `app.log`, which includes crashes. Send it along with bug reports.
 - **Update feed:** each release also has `source.json`, an AltStore-format source. Add this URL in a sideloading app that supports sources to see new builds as updates:
 
 ```
